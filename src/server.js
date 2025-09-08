@@ -4,62 +4,73 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import path from "path";
 import { fileURLToPath } from "url";
-import { EfiPay } from "sdk-node-apis-efi";
-import dotenv from "dotenv";
 
-dotenv.config();
+// Importa o provider do C6 (futuro, pode ser real ou mock)
+import c6Provider from "./providers/c6.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Corrige __dirname para ESM
+// Corrige __dirname para funcionar em ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json());
+
+// Servir arquivos estáticos do frontend (index.html e app.js em /public)
 app.use(express.static(path.join(__dirname, "..", "public")));
 
-// ---------------- EFÍ CONFIG ---------------- //
-const options = {
-  client_id: process.env.EFI_CLIENT_ID,
-  client_secret: process.env.EFI_CLIENT_SECRET,
-  certificate: process.env.EFI_CERT, // caminho do certificado .pem
-  sandbox: true, // coloque false em produção
-};
-const efipay = new EfiPay(options);
-
 // ---------------- ROTAS ---------------- //
+
+// Rota simples de teste
 app.get("/api", (req, res) => {
   res.send("🚀 API de Integração Bancária rodando!");
+});
+
+// Rota para consultar saldo no C6
+app.get("/api/c6/saldo", async (req, res) => {
+  try {
+    const saldo = await c6Provider.consultarSaldo();
+    res.json({ banco: "C6", saldo });
+  } catch (err) {
+    console.error("Erro ao consultar saldo no C6:", err.message);
+    res.status(500).json({ error: "Erro ao consultar saldo no C6" });
+  }
+});
+
+// Rota para listar transações do C6
+app.get("/api/c6/transacoes", async (req, res) => {
+  try {
+    const transacoes = await c6Provider.listarTransacoes();
+    res.json({ banco: "C6", transacoes });
+  } catch (err) {
+    console.error("Erro ao listar transações no C6:", err.message);
+    res.status(500).json({ error: "Erro ao listar transações no C6" });
+  }
 });
 
 // ---------------- PIX CHECKOUT ---------------- //
 app.post("/pix/checkout", async (req, res) => {
   try {
-    const body = {
-      calendario: { expiracao: 3600 }, // expira em 1h
-      devedor: { cpf: "12345678909", nome: "Cliente Teste" },
-      valor: { original: "10.00" }, // valor do PIX
-      chave: process.env.EFI_PIX_KEY, // sua chave pix cadastrada
-      solicitacaoPagador: "Pagamento de teste",
-    };
-
-    const response = await efipay.pixCreateImmediateCharge([], body);
-    const qrcode = await efipay.pixGenerateQRCode({
-      id: response.loc.id,
-    });
+    // aqui futuramente pode integrar com o provider real (c6Provider.gerarCobranca())
+    const fakePixCode =
+      "00020126360014BR.GOV.BCB.PIX0114+55999999999952040000530398654041.905802BR5925NOME DO RECEBEDOR6009SaoPaulo62070503***6304ABCD";
+    const fakeQrCodeUrl =
+      "https://placehold.co/256x256/eeeeee/000000?text=QR+PIX";
 
     res.json({
       success: true,
-      pixCode: qrcode.qrcode,
-      qrCode: qrcode.imagemQrcode,
-      expiresIn: 3600,
+      pixCode: fakePixCode,
+      qrCode: fakeQrCodeUrl,
+      expiresIn: 15 * 60, // expira em 15 minutos
     });
   } catch (err) {
-    console.error("Erro ao gerar PIX:", err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("Erro ao gerar PIX:", err.message);
+    res
+      .status(500)
+      .json({ success: false, error: "Erro ao gerar cobrança PIX" });
   }
 });
 
