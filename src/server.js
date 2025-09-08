@@ -65,6 +65,7 @@ app.post("/pix/checkout", async (req, res) => {
       pixCode: fakePixCode,
       qrCode: fakeQrCodeUrl,
       expiresIn: 15 * 60, // expira em 15 minutos
+    
     });
   } catch (err) {
     console.error("Erro ao gerar PIX:", err.message);
