@@ -5,40 +5,41 @@ import EfiPay from "sdk-node-apis-efi";
 
 const router = express.Router();
 
-// Configurações da Efí (pegando do .env)
-const options = {
-  sandbox: true, // coloque false em produção
+// Instância do cliente Efí
+const efipay = new EfiPay({
   client_id: process.env.EFI_CLIENT_ID,
   client_secret: process.env.EFI_CLIENT_SECRET,
-  certificate: process.env.EFI_CERT, // caminho do seu .p12
-};
+  certificate: process.env.EFI_CERT,
+  sandbox: process.env.EFI_SANDBOX === "true",
+});
 
-const efipay = new EfiPay(options);
-
-// Rota para criar uma cobrança PIX
-router.post("/criar-cobranca", async (req, res) => {
+// Criar cobrança PIX e gerar QR Code
+router.post("/cobrar", async (req, res) => {
   try {
-    const txid = uuidv4().slice(0, 35); // TXID máx 35 caracteres
+    const txid = uuidv4().slice(0, 35);
+
     const body = {
-      calendario: { expiracao: 3600 },
-      valor: { original: req.body.valor || "1.00" },
-      chave: process.env.EFI_PIX_KEY, // chave PIX cadastrada no Efí
-      solicitacaoPagador: "Pagamento do pedido",
+      calendario: { expiracao: 3600 }, // 1h
+      valor: { original: Number(req.body.valor || 1).toFixed(2) }, // valor passado pelo front
+      chave: process.env.EFI_PIX_KEY, // sua chave PIX
+      solicitacaoPagador: req.body.descricao || "Pagamento de serviço",
     };
 
-    const cobranca = await efipay.pixCreateCharge([], body);
-    const qrCode = await efipay.pixGenerateQRCode({
-      id: cobranca.loc.id,
-    });
+    // Cria cobrança
+    const charge = await efipay.pixCreateCharge([], body);
+
+    // Gera QR Code do pagamento
+    const qr = await efipay.pixGenerateQRCode({ id: charge.loc.id });
 
     res.json({
+      success: true,
       txid,
-      copiaCola: qrCode.qrcode,
-      imagemQrcode: qrCode.imagemQrcode,
+      copieCola: qr.qrcode,
+      qrImagem: qr.imagemQrcode,
     });
-  } catch (error) {
-    console.error("Erro ao criar cobrança PIX:", error.response?.data || error);
-    res.status(500).json({ error: "Erro ao criar cobrança PIX" });
+  } catch (err) {
+    console.error("Erro ao gerar PIX:", err.response?.data || err.message);
+    res.status(500).json({ success: false, error: "Erro ao gerar PIX" });
   }
 });
 
